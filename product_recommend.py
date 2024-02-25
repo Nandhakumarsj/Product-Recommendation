@@ -1,37 +1,51 @@
 ### Importing required libraries####
-from PIL import Image
-
+import pickle
+import os
+import time
 import numpy as np
 import pandas as pd
 import streamlit as st
 import tensorflow as tf
+
+from PIL import Image
 from tensorflow.keras.applications.resnet50 import ResNet50, preprocess_input
 from tensorflow.keras.layers import GlobalMaxPool2D
 from tensorflow.keras.preprocessing import image
 from sklearn.neighbors import NearestNeighbors
 from numpy.linalg import norm
+from werkzeug.utils import secure_filename
 # from annoy import AnnoyIndex
-import pickle
-import os
-from tqdm import tqdm
-import time
+# from tqdm import tqdm
+
+# Streamlit title
 st.title('Fashion Recommender system')
+
+# Load the ResNet50 model without the top layers, and freeze the weights
 
 
 @st.cache_resource
 def loader():
+    # Load the ResNet50 model with 'imagenet' weights
     model = ResNet50(weights='imagenet', include_top=False,
                      input_shape=(224, 224, 3))
+    # Set the model's weights to be non-trainable
     model.trainable = False
+    # Create a new Sequential model with the ResNet50 model and a GlobalMaxPool2D layer
     model = tf.keras.Sequential([model, GlobalMaxPool2D()])
+    # Print the summary of the new model
     model.summary()
+    # Return the new model
     return model
 
 
+# Load the data from the CSV file
 @st.cache_data
 def load_data():
+    # Read the CSV file into a pandas DataFrame
     df = pd.read_csv(
-        r'E:/Projects/DeepLearning_projects/datasets/fashion/styles.csv')
+        r'E:/Projects/DeepLearning_projects/Image Recommendation/datasets/fashion/styles.csv')
+
+    # Return the DataFrame
     return df
 
 # -- Training and Saving the features
@@ -44,32 +58,66 @@ def load_data():
 #     normal_result = result/norm(result)
 #     return normal_result
 
-# path = r'E:\Projects\DeepLearning_projects\datasets\fashion\images'
+# path = r'E:\Projects\DeepLearning_projects\Image Recommendation\datasets\fashion\images'
 
 # images = [os.path.join(path, files) for files in os.listdir(path)]
 
 
+# Load the Model
 model = loader()
+# Load the Dataframe for visualization
 df = load_data()
 
+#  Function to show the prediction results on the Image Uploader
+# def predictor(image_file):
+# Check if an image has been uploaded
+# if image_file:
+# Pre-process the image using the defined function
+# pred = image_preprocess(image_file, model)
+
+# Display the Prediction Results
+# st.write("The predicted style is     : ", classes[np.argmax(pred)])
+# st.write("Confidence of the prediction : ", max(pred)*100,"%")
+
+# Dumps images in binary format for Streamlit app performance
 # pickle.dump(images, open('images.pkl', 'wb'))
 # feature_list = []
 # for file in tqdm(images):
 #     feature_list.append(image_preprocess(file, model))
+# Dumps Feature for future use
 # pickle.dump(feature_list, open('features.pkl', 'wb'))
 
-
+# Loads the Images and Features from the dumps
 file_img = pickle.load(open(
-    r'E:\Projects\DeepLearning_projects\images.pkl', 'rb'))
+    r'E:\Projects\DeepLearning_projects\Image Recommendation\images.pkl', 'rb'))
 feature_list = (pickle.load(open(
-    r'E:\Projects\DeepLearning_projects\features.pkl', 'rb')))
+    r'E:\Projects\DeepLearning_projects\Image Recommendation\features.pkl', 'rb')))
 
 
 def Save_img(upload_img):
-    with open(os.path.join('E:/Projects/Deeplearning_Projects/uploads/', upload_img.name), 'wb') as f:
+    """
+    This function saves an uploaded image to a specified directory.
+
+    Parameters:
+    upload_img (FileStorage): The uploaded image file.
+
+    Returns:
+    str: The path to the saved image.
+    """
+
+    # Get the filename of the uploaded image
+    filename = secure_filename(upload_img.name)
+
+    # Define the path to save the image
+    img_path = os.path.join(
+        "E:/Projects/Deeplearning_Projects/Image Recommendation/uploads/", filename)
+
+    # Save the uploaded image to the specified path
+    with open(img_path, 'wb') as f:
         f.write(upload_img.getbuffer())
-        return True
-    return False
+
+    # Return the path to the saved image
+    return img_path
 
 
 def feature_extraction(path, model):
@@ -99,9 +147,10 @@ def prod_recom(features, feature_list):
 upload_img = st.file_uploader(
     "Choose the product image", type=['png', 'jpeg', 'jpg'])
 
-# Condition to check if image got uploaded then call save_img method to save and preprocess image followed by extract features and recommendation
+# Condition to check if image got uploaded then call save_img method to save and preprocess image
 if upload_img is not None:
-    if Save_img(upload_img):
+    # Temporarily saving images in the uploads directory for processing
+    if (img_path := Save_img(upload_img)):
         st.image(Image.open(upload_img))
         st.subheader('Extracting :blue[features...]', divider='rainbow')
         features = feature_extraction(
@@ -162,7 +211,11 @@ if upload_img is not None:
         # for i in range(len(neigh)):
         #     with st.columns(i):
         #         st.image(Image.open(file_img[neigh[i]]))
+
+        # Cleans up the upload directory after use
+        os.remove(img_path)
     else:
         st.header("Can't process the uploaded image")
 
+# Visualize the chart based on the uploaded image
 st.scatter_chart(df, y="masterCategory", x="gender")
